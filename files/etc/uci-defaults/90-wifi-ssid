@@ -1,0 +1,31 @@
+#!/bin/sh
+
+# --- 初始化无线 SSID ---
+# 固定默认 SSID
+SSID_24G="MyRouter"
+SSID_5G="MyRouter_5G"
+
+# 确保 wireless 已生成（首次启动可能还不存在）
+[ -f /etc/config/wireless ] || /sbin/wifi config >/dev/null 2>&1
+
+# 2.4G
+if uci -q get wireless.default_MT7986_1_1 >/dev/null; then
+	uci -q set wireless.default_MT7986_1_1.ssid="$SSID_24G"
+fi
+
+# 5G
+if uci -q get wireless.default_MT7986_1_2 >/dev/null; then
+	uci -q set wireless.default_MT7986_1_2.ssid="$SSID_5G"
+fi
+
+uci -q commit wireless
+
+# --- modify if luci.diag section exists ---
+if uci -q get luci.diag >/dev/null; then
+	uci -q set luci.diag.dns='ipw.cn'
+	uci -q set luci.diag.ping='ipw.cn'
+	uci -q set luci.diag.route='ipw.cn'
+	uci -q commit luci
+fi
+
+exit 0

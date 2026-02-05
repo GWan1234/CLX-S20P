@@ -1,0 +1,449 @@
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+/dts-v1/;
+
+#include "mt7986a.dtsi"
+#include "mt7986a-pinctrl.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/leds/common.h>
+
+/*
+ * CLX S20P (MT7986A + eMMC + MT7531 DSA + 2x 2.5G PHY)
+ * - gmac0: 2.5G fixed-link -> MT7531 CPU port (DSA)
+ * - gmac1: 2.5G -> external PHY@7 (WAN)
+ * - MT7531 port5: 2.5G -> external PHY@5 (LAN 2.5G)
+ *
+ * 面向 OpenWrt v21.02（常见 5.4/5.10 backport 树）：
+ * - 采用 DSA(mt7531) 结构
+ * - nvmem 从 eMMC “factory” 分区读 EEPROM + MAC
+ * - 不强绑 OpenWrt 的 bootargs（保留 stdout-path，root/bootargs 交给引导链/内核命令行）
+ */
+
+/* 存在问题: 2.5G获取不到IP */
+
+/ {
+	model = "CLX S20P";
+	compatible = "clx,s20p-dsa", "mediatek,mt7986a-emmc-rfb";
+
+	aliases {
+		serial0 = &uart0;
+
+		/* OpenWrt 常用：用于生成默认 MAC/网络口映射 */
+		label-mac-device = &gmac0;
+
+		led-boot = &led_sys;
+		led-failsafe = &led_sys;
+		led-running = &led_sys;
+		led-upgrade = &led_sys;
+	};
+
+	chosen {
+		bootargs = "console=ttyS0,115200n1 loglevel=8 \
+			    earlycon=uart8250,mmio32,0x11002000 \
+			    root=PARTLABEL=rootfs rootwait rootfstype=squashfs,f2fs";
+	};
+
+	memory {
+		reg = <0 0x40000000 0 0x80000000>; /* 2GiB */
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		button-reset {
+			label = "reset";
+			linux,code = <KEY_RESTART>;
+			gpios = <&pio 16 GPIO_ACTIVE_LOW>;
+		};
+	};
+
+	gpio-leds {
+		compatible = "gpio-leds";
+
+		led_wlan5g: led-wlan5g {
+			label = "wlan5g";
+			gpios = <&pio 2 GPIO_ACTIVE_LOW>;
+		};
+
+		led_wlan2g: led-wlan2g {
+			label = "wlan2g";
+			gpios = <&pio 1 GPIO_ACTIVE_LOW>;
+		};
+
+		led_sys: led-sys {
+			label = "sys";
+			gpios = <&pio 22 GPIO_ACTIVE_LOW>;
+		};
+	};
+
+	reg_1p8v: regulator-1p8v {
+		compatible = "regulator-fixed";
+		regulator-name = "fixed-1.8V";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	reg_3p3v: regulator-3p3v {
+		compatible = "regulator-fixed";
+		regulator-name = "fixed-3.3V";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	usb_vbus: regulator-usb-vbus {
+		compatible = "regulator-fixed";
+		regulator-name = "usb_vbus";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		gpios = <&pio 17 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-boot-on;
+	};
+};
+
+/* ===== Ethernet / MDIO / Switch (DSA) ===== */
+&eth {
+	status = "okay";
+
+	/*
+	 * gmac0：2.5G 固定链路到 mt7531 CPU port (port6)
+	 * 这部分要稳定，否则 DSA cpu 口不通就会出现“2.5G/交换口拿不到 IP”的表象。
+	 */
+	gmac0: mac@0 {
+		compatible = "mediatek,eth-mac";
+		reg = <0>;
+		phy-mode = "2500base-x";
+
+		/* 从 factory 取 MAC（按你参考写法） */
+		nvmem-cells = <&macaddr_factory_2a 0>;
+		nvmem-cell-names = "mac-address";
+
+		fixed-link {
+			speed = <2500>;
+			full-duplex;
+			pause;
+		};
+	};
+
+	/*
+	 * gmac1：独立 2.5G (WAN)，外置 PHY@7
+	 * 关键点：phy-mode 必须匹配（从你 dd 提取出来的树也是 2500base-x）
+	 */
+	gmac1: mac@1 {
+		compatible = "mediatek,eth-mac";
+		reg = <1>;
+		phy-mode = "2500base-x";
+
+		nvmem-cells = <&macaddr_factory_24 0>;
+		nvmem-cell-names = "mac-address";
+
+		phy-handle = <&phy7>;
+	};
+
+	mdio: mdio-bus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		/*
+		 * PHY@5：接在 mt7531 port5（额外 2.5G LAN）
+		 * reset/interrupt/Realtek LED 配置沿用参考（你提取树里也有 reset-assert/deassert）
+		 */
+		phy5: ethernet-phy@5 {
+			compatible = "ethernet-phy-ieee802.3-c45";
+			reg = <5>;
+
+			reset-assert-us = <100000>;
+			reset-deassert-us = <100000>;
+			reset-gpios = <&pio 48 GPIO_ACTIVE_LOW>;
+
+			interrupt-parent = <&pio>;
+			interrupts = <47 IRQ_TYPE_LEVEL_LOW>;
+
+			realtek,aldps-enable;
+			realtek,led-link-select = <0xa7 0x03 0x0>;
+			realtek,led-act-select = <0x321b>;
+		};
+
+		/*
+		 * PHY@7：独立 WAN 2.5G
+		 */
+		phy7: ethernet-phy@7 {
+			compatible = "ethernet-phy-ieee802.3-c45";
+			reg = <7>;
+
+			reset-assert-us = <100000>;
+			reset-deassert-us = <100000>;
+			reset-gpios = <&pio 6 GPIO_ACTIVE_LOW>;
+
+			interrupt-parent = <&pio>;
+			interrupts = <46 IRQ_TYPE_LEVEL_LOW>;
+
+			realtek,aldps-enable;
+			realtek,led-link-select = <0xa7 0x03 0x0>;
+			realtek,led-act-select = <0x321b>;
+		};
+
+		switch@1f {
+			compatible = "mediatek,mt7531";
+			reg = <31>;
+
+			/* 提取树里是 active-high；保持一致 */
+			reset-gpios = <&pio 5 GPIO_ACTIVE_HIGH>;
+
+			interrupt-controller;
+			#interrupt-cells = <1>;
+			interrupt-parent = <&pio>;
+			interrupts = <66 IRQ_TYPE_LEVEL_HIGH>;
+
+			ports {
+				/*
+				 * 端口标签：按 OpenWrt DSA 常用 lan1..lanX
+				 * 你提取树里 port0..4 的 label 是 lan4..lan0（只是命名，不影响转发）
+				 * 这里统一为 lan1..lan5，port5 为 lan6(2.5G)。
+				 */
+				port@0 { reg = <0>; label = "lan5"; };
+				port@1 { reg = <1>; label = "lan4"; };
+				port@2 { reg = <2>; label = "lan3"; };
+				port@3 { reg = <3>; label = "lan2"; };
+				port@4 { reg = <4>; label = "lan1"; };
+
+				/* mt7531 port5 -> 外置 2.5G PHY@5 */
+				port@5 {
+					reg = <5>;
+					label = "lan6";
+					phy-mode = "2500base-x";
+					phy-handle = <&phy5>;
+				};
+
+				/* CPU port：必须绑定 gmac0 + fixed-link 2.5G */
+				port@6 {
+					reg = <6>;
+					label = "cpu";
+					ethernet = <&gmac0>;
+					phy-mode = "2500base-x";
+
+					fixed-link {
+						speed = <2500>;
+						full-duplex;
+						pause;
+					};
+				};
+			};
+		};
+	};
+};
+
+&hnat {
+	/* OpenWrt 21.02 常见写法：WAN 是 eth1；LAN 走 DSA bridge 的 lan */
+	mtketh-wan = "eth1";
+	mtketh-lan = "lan";
+	mtketh-max-gmac = <2>;
+	ext-devices-prefix = "usb", "wwan";
+	ext-devices = "wwan0_0","wwan0_1","wwan0.1","wwan0.2";
+	status = "okay";
+};
+
+&xhci {
+	vusb33-supply = <&reg_3p3v>;
+	vbus-supply = <&usb_vbus>;
+	status = "okay";
+};
+
+&pcie0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pcie0_pins>;
+	status = "okay";
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&watchdog {
+	status = "okay";
+};
+
+/* ===== eMMC factory / nvmem（WiFi EEPROM + MAC） ===== */
+&mmc0 {
+	pinctrl-names = "default", "state_uhs";
+	pinctrl-0 = <&mmc0_pins_default>;
+	pinctrl-1 = <&mmc0_pins_uhs>;
+
+	bus-width = <8>;
+	max-frequency = <200000000>;
+	cap-mmc-highspeed;
+	mmc-hs200-1_8v;
+	mmc-hs400-1_8v;
+	hs400-ds-delay = <0x14014>;
+
+	vmmc-supply = <&reg_3p3v>;
+	vqmmc-supply = <&reg_1p8v>;
+
+	non-removable;
+	no-sd;
+	no-sdio;
+	status = "okay";
+
+	/*
+	 * 用 partname="factory" 方式绑定 nvmem：
+	 * OpenWrt/ImmortalWrt 的部分树支持；如果你的 21.02 树不支持该 block/partitions 结构，
+	 * 需要改成对应固件分区的 nvmem-provider（那就得看你的实际 GPT/分区导出方式）。
+	 */
+	card@0 {
+		compatible = "mmc-card";
+		reg = <0>;
+
+		block {
+			compatible = "block-device";
+
+			partitions {
+				block-partition-factory {
+					partname = "factory";
+
+					nvmem-layout {
+						compatible = "fixed-layout";
+						#address-cells = <1>;
+						#size-cells = <1>;
+
+						eeprom_factory_0: eeprom@0 {
+							reg = <0x0 0x1000>;
+						};
+
+						macaddr_factory_24: macaddr@24 {
+							compatible = "mac-base";
+							reg = <0x24 0x6>;
+							#nvmem-cell-cells = <1>;
+						};
+
+						macaddr_factory_2a: macaddr@2a {
+							compatible = "mac-base";
+							reg = <0x2a 0x6>;
+							#nvmem-cell-cells = <1>;
+						};
+					};
+				};
+			};
+		};
+	};
+};
+
+&wbsys {
+	nvmem-cells = <&eeprom_factory_0>;
+	nvmem-cell-names = "eeprom";
+
+	pinctrl-names = "default", "dbdc";
+	pinctrl-0 = <&wf_2g_5g_pins>;
+	pinctrl-1 = <&wf_dbdc_pins>;
+
+	status = "okay";
+};
+
+&pio {
+	/* eMMC pinmux */
+	mmc0_pins_default: mmc0-pins-default {
+		mux {
+			function = "flash";
+			groups = "emmc_51";
+		};
+
+		conf-cmd-dat {
+			pins = "EMMC_DATA_0", "EMMC_DATA_1", "EMMC_DATA_2",
+			       "EMMC_DATA_3", "EMMC_DATA_4", "EMMC_DATA_5",
+			       "EMMC_DATA_6", "EMMC_DATA_7", "EMMC_CMD";
+			input-enable;
+			drive-strength = <MTK_DRIVE_4mA>;
+			mediatek,pull-up-adv = <1>;
+		};
+
+		conf-clk {
+			pins = "EMMC_CK";
+			drive-strength = <MTK_DRIVE_6mA>;
+			mediatek,pull-down-adv = <2>;
+		};
+
+		conf-ds {
+			pins = "EMMC_DSL";
+			mediatek,pull-down-adv = <2>;
+		};
+
+		conf-rst {
+			pins = "EMMC_RSTB";
+			drive-strength = <MTK_DRIVE_4mA>;
+			mediatek,pull-up-adv = <1>;
+		};
+	};
+
+	mmc0_pins_uhs: mmc0-uhs-pins {
+		mux {
+			function = "flash";
+			groups = "emmc_51";
+		};
+
+		conf-cmd-dat {
+			pins = "EMMC_DATA_0", "EMMC_DATA_1", "EMMC_DATA_2",
+			       "EMMC_DATA_3", "EMMC_DATA_4", "EMMC_DATA_5",
+			       "EMMC_DATA_6", "EMMC_DATA_7", "EMMC_CMD";
+			input-enable;
+			drive-strength = <MTK_DRIVE_4mA>;
+			mediatek,pull-up-adv = <1>;
+		};
+
+		conf-clk {
+			pins = "EMMC_CK";
+			drive-strength = <MTK_DRIVE_6mA>;
+			mediatek,pull-down-adv = <2>;
+		};
+
+		conf-ds {
+			pins = "EMMC_DSL";
+			mediatek,pull-down-adv = <2>;
+		};
+
+		conf-rst {
+			pins = "EMMC_RSTB";
+			drive-strength = <MTK_DRIVE_4mA>;
+			mediatek,pull-up-adv = <1>;
+		};
+	};
+
+	/* WiFi pinmux */
+	wf_2g_5g_pins: wf-2g-5g-pins {
+		mux {
+			function = "wifi";
+			groups = "wf_2g", "wf_5g";
+		};
+
+		conf {
+			pins = "WF0_HB1", "WF0_HB2", "WF0_HB3", "WF0_HB4",
+			       "WF0_HB0", "WF0_HB0_B", "WF0_HB5", "WF0_HB6",
+			       "WF0_HB7", "WF0_HB8", "WF0_HB9", "WF0_HB10",
+			       "WF0_TOP_CLK", "WF0_TOP_DATA", "WF1_HB1",
+			       "WF1_HB2", "WF1_HB3", "WF1_HB4", "WF1_HB0",
+			       "WF1_HB5", "WF1_HB6", "WF1_HB7", "WF1_HB8",
+			       "WF1_TOP_CLK", "WF1_TOP_DATA";
+			drive-strength = <MTK_DRIVE_4mA>;
+		};
+	};
+
+	wf_dbdc_pins: wf-dbdc-pins {
+		mux {
+			function = "wifi";
+			groups = "wf_dbdc";
+		};
+
+		conf {
+			pins = "WF0_HB1", "WF0_HB2", "WF0_HB3", "WF0_HB4",
+			       "WF0_HB0", "WF0_HB0_B", "WF0_HB5", "WF0_HB6",
+			       "WF0_HB7", "WF0_HB8", "WF0_HB9", "WF0_HB10",
+			       "WF0_TOP_CLK", "WF0_TOP_DATA", "WF1_HB1",
+			       "WF1_HB2", "WF1_HB3", "WF1_HB4", "WF1_HB0",
+			       "WF1_HB5", "WF1_HB6", "WF1_HB7", "WF1_HB8",
+			       "WF1_TOP_CLK", "WF1_TOP_DATA";
+			drive-strength = <MTK_DRIVE_4mA>;
+		};
+	};
+};
