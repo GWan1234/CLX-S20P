@@ -1,10 +1,10 @@
-# CLX-S20P 快速操作指南
+# CLX-S20P 刷机
 
-本文件汇总常用的串口/TTL、备份、刷写与分区相关命令与注意事项。操作前请务必备份数据并确保电源稳定。
+串口/TTL、备份、刷写与分区相关命令与注意事项。操作前请务必备份数据并确保电源稳定。
 
 ## 1. 进入 failsafe 并重置 `root` 密码
 
-1. 开机或重启时按住 `f`，并多按 `Enter` 进入 failsafe。
+1. 开机或重启时按住 `f`，并多按 `Enter` 进入 failsafe。见`00-failsafe.png`
 2. 重置 `root` 密码（示例密码为 `password`）：
 
     ```sh
@@ -118,9 +118,9 @@ The operation has completed successfully.
 mkfs.ext4 $(blkid -t PARTLABEL=permanent_config -o device)
 ```
 
-## 8. 切换固件槽位（21.02 <-> 23.05/master）
+## 8. 双系统切换（21.02 <-> 24.10/immortalwrt）
 
-切换到 21.02（当前为 23.05/master）：
+切换到 21.02（当前为 24.10/immortalwrt）：
 
 ```sh
 cp /etc/fw_env.config /etc/fw_env.config.bak
@@ -130,7 +130,7 @@ cp /etc/fw_env.config.bak /etc/fw_env.config
 reboot
 ```
 
-切换回 23.05/master（当前为 21.02）：
+切换回 24.10/immortalwrt（当前为 21.02）：
 
 ```sh
 fw_setenv dual_boot.current_slot 1
