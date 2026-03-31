@@ -7,24 +7,24 @@
 
 - ## Hardware Info
 
-   | **Component**      |                         **详细信息**                           |
-   |--------------------|---------------------------------------------------------------|
+   | **Component**      |                         **Details**                           |   **Status**   |
+   |--------------------|---------------------------------------------------------------|----------------|
    | **Architecture**   | Ralink ARM                                                    |
    | **Vendor**         | MediaTek                                                      |
    | **Bootloader**     | U-Boot                                                        |
-   | **System-On-Chip** | MediaTek MT7686a - ARM Cortex-A53                             |
+   | **System-On-Chip** | MediaTek MT7986a - ARM Cortex-A53                             |
    | **CPU/Speed**      | 2.0GHz (Quad Core)                                            |
    | **eMMC**           | SanDisk 2201DVAF J00Y                                         |
    | **Size**           | eMMC 128GB   5.1（HS400）                                      |
    | **RAM**            | DDR4 2048 MiB                                                 |
-   | **Wireless 1**     | MediaTek MT7975N - 802.11b/g/n/ax (2.4GHz) 4×4 MIMO           |
-   | **Wireless 2**     | MediaTek MT7975PN - 802.11a/n/ac/ax (5GHz) 4×4 MIMO           |
-   | **Ethernet Lan**   | 5 x 1000M                                                     |
-   | **Ethernet Wan**   | 2 x 2500M RTL8221B                                            |
+   | **Wireless 1**     | MediaTek MT7975N - 802.11b/g/n/ax (2.4GHz) 4×4 MIMO           |       ✅       |
+   | **Wireless 2**     | MediaTek MT7975PN - 802.11a/n/ac/ax (5GHz) 4×4 MIMO           |       ✅       |
+   | **Ethernet Lan**   | 5 x 1000M                                                     |       ✅       |
+   | **Ethernet Wan**   | 2 x 2500M RTL8221B                                            |       ✅       |
    | **Switch**         | MediaTek MT7531AE                                             |
-   | **USB**            | 1 x 3.0                                                       |
-   | **Serial**         | Yes                                                           |
-   | **M.2**            | Must include socket                                           |
+   | **USB**            | 1 x 3.0                                                       |       ✅       |
+   | **Serial**         | Yes                                                           |       ✅       |
+   | **M.2**            | Must include socket                                           |       🆗       |
 
 - ## GPT Info
   ```bash
