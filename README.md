@@ -20,7 +20,7 @@
    | **Wireless 1**     | MediaTek MT7975N - 802.11b/g/n/ax (2.4GHz) 4×4 MIMO           |       ✅       |
    | **Wireless 2**     | MediaTek MT7975PN - 802.11a/n/ac/ax (5GHz) 4×4 MIMO           |       ✅       |
    | **Ethernet Lan**   | 5 x 1000M                                                     |       ✅       |
-   | **Ethernet Wan**   | 2 x 2500M RTL8221B                                            |       ✅       |
+   | **Ethernet Wan**   | 2 x 2500M RTL8221B-VB-CG                                      |       ✅       |
    | **Switch**         | MediaTek MT7531AE                                             |
    | **USB**            | 1 x 3.0                                                       |       ✅       |
    | **Serial**         | Yes                                                           |       ✅       |
